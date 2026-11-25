@@ -1,5 +1,6 @@
-import { I18N, formatMoney, formatColFull } from "./i18n.js?v=20261125b";
-import { RobRunScanner, evaluateItem } from "./scanner.js?v=20261125b";
+import { I18N, formatMoney, formatColFull } from "./i18n.js?v=20261125c";
+import { RobRunScanner, evaluateItem } from "./scanner.js?v=20261125c";
+import { VehicleWorkbench } from "./vehicles.js?v=20261125c";
 
 const scanner = new RobRunScanner();
 
@@ -43,6 +44,7 @@ const state = {
 const els = {
   viewScanner: document.getElementById("view-scanner"),
   viewDatabase: document.getElementById("view-database"),
+  viewVehicles: document.getElementById("view-vehicles"),
   dbSearchInput: document.getElementById("db-search-input"),
   dbSortSelect: document.getElementById("db-sort-select"),
   dbCountBar: document.getElementById("db-count-bar"),
@@ -96,6 +98,8 @@ const els = {
   fixSearchResults: document.getElementById("fix-search-results"),
   fixEmptyBtn: document.getElementById("fix-empty-btn"),
 };
+
+const vehiclesUI = new VehicleWorkbench(els.viewVehicles, () => state.lang, () => t());
 
 function t() {
   return I18N[state.lang] || I18N.en;
@@ -160,6 +164,7 @@ function switchView(viewName, focusItemId = null) {
   state.view = viewName;
   els.viewScanner.classList.toggle("hidden", viewName !== "scanner");
   els.viewDatabase.classList.toggle("hidden", viewName !== "database");
+  els.viewVehicles.classList.toggle("hidden", viewName !== "vehicles");
   document.querySelectorAll(".mode-tab").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === viewName);
   });
@@ -167,6 +172,8 @@ function switchView(viewName, focusItemId = null) {
   if (viewName === "database") {
     if (focusItemId) state.dbSelectedId = focusItemId;
     renderDatabase();
+  } else if (viewName === "vehicles") {
+    vehiclesUI.render();
   }
 }
 
@@ -191,6 +198,7 @@ function applyLanguage() {
   resetClearConfirm();
   renderAll();
   if (state.view === "database") renderDatabase();
+  if (state.view === "vehicles") vehiclesUI.render();
 }
 
 // Render annotated canvas (live viewport or export PNG with legend)

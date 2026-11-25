@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=20261125b" />
+  <link rel="stylesheet" href="./styles.css?v=20261125c" />
 </head>
 <body>
   <!-- Global Drag Overlay -->
@@ -32,6 +32,7 @@
       <nav class="mode-nav" role="tablist" aria-label="Views">
         <button class="mode-tab active" data-view="scanner" data-i18n="navScanner">Loot Scanner</button>
         <button class="mode-tab" data-view="database" data-i18n="navDatabase">Item Search</button>
+        <button class="mode-tab" data-view="vehicles" data-i18n="navVehicles">Car Tuning</button>
       </nav>
       <!-- Only visible while loading or on error -->
       <span id="db-status" class="status-pill loading" data-i18n="loadingDb">Loading item database…</span>
@@ -345,6 +346,9 @@
     </aside>
   </section>
 
+  <!-- Main Workspace: Car Tuning & Comparison View -->
+  <section id="view-vehicles" class="veh-workspace hidden"></section>
+
   <footer class="footer">
     <span data-i18n="footerCredit">Item data &amp; icons from Rob Run (Kefir) via RobrunCodex &amp; robrun.info · Runs 100% locally in your browser</span>
   </footer>
@@ -352,6 +356,6 @@
   <!-- Floating Rich Hover Tooltip -->
   <div id="item-tooltip" class="item-tooltip hidden" role="tooltip"></div>
 
-  <script type="module" src="./js/app.js?v=20261125b"></script>
+  <script type="module" src="./js/app.js?v=20261125c"></script>
 </body>
 </html>
