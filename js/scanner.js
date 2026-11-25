@@ -771,7 +771,7 @@ export function evaluateItem(item, enabledTiers, t, lang) {
   // Collection items
   if (activeCols.length > 0) {
     const prefixMap = lang === "de"
-      ? { Basic: "B", Additional: "Z", Special: "S", Unique: "E" }
+      ? { Basic: "G", Additional: "Z", Special: "B", Unique: "E" }
       : { Basic: "B", Additional: "A", Special: "S", Unique: "U" };
     const codes = activeCols.map((c) => `${prefixMap[c.group]}${c.slug.split("-")[1]}`);
     return {

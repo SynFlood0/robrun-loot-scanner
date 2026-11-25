@@ -125,19 +125,14 @@ body {
   gap: 10px;
 }
 
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  background: var(--util);
-  color: #161412;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 21px;
-  letter-spacing: 0.02em;
-  border-radius: var(--radius-sm);
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border-strong);
+  background: #0d1215;
+  flex-shrink: 0;
 }
 
 .brand-copy {

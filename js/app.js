@@ -87,6 +87,7 @@ function getOwnedItemCounts() {
 function applyLanguage() {
   const dict = t();
   document.documentElement.lang = state.lang;
+  if (dict.pageTitle) document.title = dict.pageTitle;
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     const key = node.getAttribute("data-i18n");
     if (dict[key]) node.textContent = dict[key];
