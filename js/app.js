@@ -3,22 +3,41 @@ import { RobRunScanner, evaluateItem } from "./scanner.js";
 
 const scanner = new RobRunScanner();
 
+function loadSavedTiers() {
+  const def = { Basic: true, Additional: true, Special: true, Unique: true };
+  try {
+    const raw = localStorage.getItem("rr_tiers");
+    if (!raw) return def;
+    const parsed = JSON.parse(raw);
+    return {
+      Basic: parsed.Basic !== false,
+      Additional: parsed.Additional !== false,
+      Special: parsed.Special !== false,
+      Unique: parsed.Unique !== false,
+    };
+  } catch {
+    return def;
+  }
+}
+
 const state = {
   view: "scanner", // "scanner" | "database"
   lang: localStorage.getItem("rr_lang") || (navigator.language?.toLowerCase().startsWith("de") ? "de" : "en"),
-  enabledTiers: { Basic: true, Additional: true, Special: true, Unique: true },
-  showKeepBadges: true,
+  enabledTiers: loadSavedTiers(),
+  onlySell: false,
   sellScope: "tab", // "tab" | "all"
-  tabs: [], // { id, name, img, scan, gridOverride }
+  tabs: [], // { id, num, customName, origFilename, img, scan, gridOverride }
   activeTabId: null,
   hoveredSlotId: null,
   selectedSlotId: null,
   nextTabNum: 1,
+  clearConfirmTimer: null,
   dbCat: "all",
   dbRar: "all",
   dbSort: "price-desc",
   dbQuery: "",
   dbSelectedId: null,
+  dbTiersOpen: false,
 };
 
 const els = {
@@ -27,6 +46,9 @@ const els = {
   dbSearchInput: document.getElementById("db-search-input"),
   dbSortSelect: document.getElementById("db-sort-select"),
   dbCountBar: document.getElementById("db-count-bar"),
+  dbTiersSummary: document.getElementById("db-tiers-summary"),
+  dbTiersToggleBtn: document.getElementById("db-tiers-toggle-btn"),
+  dbTiersDrawer: document.getElementById("db-tiers-drawer"),
   dbItemsGrid: document.getElementById("db-items-grid"),
   dbDetailCard: document.getElementById("db-detail-card"),
   dbStatus: document.getElementById("db-status"),
@@ -36,10 +58,12 @@ const els = {
   clearAllBtn: document.getElementById("clear-all-btn"),
   emptyState: document.getElementById("empty-state"),
   scannerView: document.getElementById("scanner-view"),
+  ledgerEmptyGuide: document.getElementById("ledger-empty-guide"),
+  ledgerActive: document.getElementById("ledger-active"),
   tabsList: document.getElementById("tabs-list"),
   canvas: document.getElementById("overlay-canvas"),
   scanSpinner: document.getElementById("scan-spinner"),
-  toggleKeep: document.getElementById("toggle-keep-badges"),
+  toggleOnlySell: document.getElementById("toggle-only-sell"),
   downloadBtn: document.getElementById("download-png-btn"),
   copyBtn: document.getElementById("copy-png-btn"),
   gridAdjustBtn: document.getElementById("grid-adjust-btn"),
@@ -51,10 +75,13 @@ const els = {
   gridRows: document.getElementById("grid-rows"),
   gridApplyBtn: document.getElementById("grid-apply-btn"),
   gridResetBtn: document.getElementById("grid-reset-btn"),
+  primaryTotalBox: document.getElementById("primary-total-box"),
+  secondaryTotalBox: document.getElementById("secondary-total-box"),
   statTabMoney: document.getElementById("stat-tab-money"),
   statTabCounts: document.getElementById("stat-tab-counts"),
   statAllMoney: document.getElementById("stat-all-money"),
   statAllTabs: document.getElementById("stat-all-tabs"),
+  readySection: document.getElementById("ready-section"),
   readyCount: document.getElementById("ready-count"),
   readyList: document.getElementById("ready-list"),
   almostCount: document.getElementById("almost-count"),
@@ -90,27 +117,14 @@ function itemSources(it) {
   return raw.filter((s) => s && !/^(Wird nach dem Füllen zu|When filled, turns into):?$/i.test(s.trim()));
 }
 
-function switchView(viewName, focusItemId = null) {
-  state.view = viewName;
-  els.viewScanner.classList.toggle("hidden", viewName !== "scanner");
-  els.viewDatabase.classList.toggle("hidden", viewName !== "database");
-  document.querySelectorAll(".mode-tab").forEach((b) => {
-    b.classList.toggle("active", b.dataset.view === viewName);
-  });
-  hideTooltip();
-  if (viewName === "database") {
-    if (focusItemId) {
-      state.dbSelectedId = focusItemId;
-    }
-    renderDatabase();
-  }
+function tabDisplayName(tab) {
+  return tab.customName || `${t().tabPrefix} #${tab.num}`;
 }
 
 function getActiveTab() {
   return state.tabs.find((x) => x.id === state.activeTabId) || null;
 }
 
-// Compute set of all owned itemIds across all scanned tabs
 function getOwnedItemCounts() {
   const counts = new Map();
   for (const tab of state.tabs) {
@@ -123,7 +137,39 @@ function getOwnedItemCounts() {
   return counts;
 }
 
-// Apply translations across static DOM
+function syncTierControls() {
+  document.querySelectorAll('input[type="checkbox"][data-tier]').forEach((cb) => {
+    cb.checked = Boolean(state.enabledTiers[cb.dataset.tier]);
+  });
+  const activeCount = Object.values(state.enabledTiers).filter(Boolean).length;
+  const dict = t();
+  els.dbTiersSummary.textContent = `${dict.dbTiersPrefix} ${activeCount} ${dict.dbTiersOf}`;
+  els.dbTiersToggleBtn.textContent = state.dbTiersOpen ? dict.dbTiersDone : dict.dbTiersEdit;
+  els.dbTiersDrawer.classList.toggle("hidden", !state.dbTiersOpen);
+}
+
+function flashTotals() {
+  for (const box of [els.primaryTotalBox, els.secondaryTotalBox]) {
+    box.classList.remove("sum-flash");
+    void box.offsetWidth;
+    box.classList.add("sum-flash");
+  }
+}
+
+function switchView(viewName, focusItemId = null) {
+  state.view = viewName;
+  els.viewScanner.classList.toggle("hidden", viewName !== "scanner");
+  els.viewDatabase.classList.toggle("hidden", viewName !== "database");
+  document.querySelectorAll(".mode-tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === viewName);
+  });
+  hideTooltip();
+  if (viewName === "database") {
+    if (focusItemId) state.dbSelectedId = focusItemId;
+    renderDatabase();
+  }
+}
+
 function applyLanguage() {
   const dict = t();
   document.documentElement.lang = state.lang;
@@ -141,14 +187,13 @@ function applyLanguage() {
   document.querySelectorAll(".lang-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.lang === state.lang);
   });
-  if (scanner.ready) {
-    els.dbStatus.textContent = `${dict.dbReady} · ${scanner.db.items.length}`;
-  }
+  syncTierControls();
+  resetClearConfirm();
   renderAll();
   if (state.view === "database") renderDatabase();
 }
 
-// Render annotated canvas (either live viewport or high-res export with legend bar)
+// Render annotated canvas (live viewport or export PNG with legend)
 function renderCanvas(tab, targetCanvas, includeLegend = false) {
   if (!tab || !tab.img || !tab.scan) return;
   const dict = t();
@@ -168,12 +213,11 @@ function renderCanvas(tab, targetCanvas, includeLegend = false) {
     ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
     ctx.textBaseline = "middle";
     let lx = 10;
-    const items = [
+    for (const [col, label] of [
       ["#2ed46a", dict.legendSell],
       ["#ea5449", dict.legendKeep],
       ["#e6b134", dict.legendUtil],
-    ];
-    for (const [col, label] of items) {
+    ]) {
       ctx.fillStyle = col;
       ctx.fillRect(lx, 10, 12, 14);
       ctx.fillStyle = "#f2ede4";
@@ -194,25 +238,33 @@ function renderCanvas(tab, targetCanvas, includeLegend = false) {
     const isHover = !includeLegend && state.hoveredSlotId === sl.slotId;
     const isSel = !includeLegend && state.selectedSlotId === sl.slotId;
 
+    if (state.onlySell && ev.status !== "SELL" && !isHover && !isSel) {
+      // Subtle dim outline only so SELL items pop immediately
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0 + 0.5, y0 + 0.5, bw - 1, bh - 1);
+      continue;
+    }
+
     let fill, stroke, badgeBg, textCol, lineW;
     if (ev.status === "SELL") {
-      fill = isHover ? "rgba(46, 212, 106, 0.30)" : "rgba(46, 212, 106, 0.19)";
+      fill = isHover ? "rgba(46, 212, 106, 0.34)" : "rgba(46, 212, 106, 0.20)";
       stroke = "#2ef073";
-      badgeBg = "rgba(18, 138, 52, 0.94)";
+      badgeBg = "rgba(18, 138, 52, 0.95)";
       textCol = "#ffffff";
-      lineW = isHover || isSel ? 3.5 : 2.5;
+      lineW = isHover || isSel ? 3 : 2.5;
     } else if (ev.status === "KEEP") {
-      fill = isHover ? "rgba(234, 84, 73, 0.24)" : "rgba(234, 84, 73, 0.10)";
+      fill = isHover ? "rgba(234, 84, 73, 0.28)" : "rgba(234, 84, 73, 0.10)";
       stroke = "rgba(238, 72, 65, 0.85)";
       badgeBg = "rgba(168, 30, 28, 0.90)";
       textCol = "#ffe8e6";
-      lineW = isHover || isSel ? 3 : 1.75;
+      lineW = isHover || isSel ? 2.5 : 1.75;
     } else {
-      fill = isHover ? "rgba(230, 177, 52, 0.26)" : "rgba(230, 177, 52, 0.13)";
+      fill = isHover ? "rgba(230, 177, 52, 0.30)" : "rgba(230, 177, 52, 0.13)";
       stroke = "rgba(238, 190, 56, 0.90)";
       badgeBg = "rgba(165, 118, 14, 0.92)";
       textCol = "#ffffff";
-      lineW = isHover || isSel ? 3 : 2;
+      lineW = isHover || isSel ? 2.5 : 2;
     }
 
     ctx.fillStyle = fill;
@@ -222,22 +274,40 @@ function renderCanvas(tab, targetCanvas, includeLegend = false) {
     ctx.lineWidth = lineW;
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, bw - 1, bh - 1);
 
-    // Draw badge pill
-    const showBadge = ev.status !== "KEEP" || state.showKeepBadges || isHover || isSel;
-    if (showBadge) {
-      const lowConf = !sl.manual && sl.score < 0.50;
-      const badgeTxt = lowConf ? `${ev.badge}?` : ev.badge;
-      ctx.font = '700 10.5px "Plus Jakarta Sans", sans-serif';
-      const tw = ctx.measureText(badgeTxt).width;
-      const pw = Math.min(bw - 4, tw + 8);
-      const ph = 15;
-      ctx.fillStyle = badgeBg;
-      ctx.fillRect(x0 + 2, y0 + 2, pw, ph);
-      ctx.fillStyle = textCol;
-      ctx.textBaseline = "middle";
-      ctx.fillText(badgeTxt, x0 + 6, y0 + 9.5, bw - 8);
+    // Clear crisp white hover/selection halo so clickability is unmistakable
+    if (isHover || isSel) {
+      ctx.strokeStyle = isSel ? "#ffffff" : "rgba(255, 255, 255, 0.92)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0 + 2.5, y0 + 2.5, Math.max(2, bw - 5), Math.max(2, bh - 5));
     }
+
+    // Badge pill
+    const lowConf = !sl.manual && sl.score < 0.50;
+    const badgeTxt = lowConf ? `${ev.badge}?` : ev.badge;
+    ctx.font = '700 10.5px "Plus Jakarta Sans", sans-serif';
+    const tw = ctx.measureText(badgeTxt).width;
+    const pw = Math.min(bw - 4, tw + 8);
+    const ph = 15;
+    ctx.fillStyle = badgeBg;
+    ctx.fillRect(x0 + 2, y0 + 2, pw, ph);
+    ctx.fillStyle = textCol;
+    ctx.textBaseline = "middle";
+    ctx.fillText(badgeTxt, x0 + 6, y0 + 9.5, bw - 8);
   }
+}
+
+function updateGridWarning(tab) {
+  const dict = t();
+  if (!tab || !tab.scan || tab.scan.slots.length === 0) {
+    els.gridAdjustBtn.classList.remove("grid-warn");
+    els.gridAdjustBtn.textContent = dict.gridBtn;
+    return;
+  }
+  const lowCnt = tab.scan.slots.filter((s) => !s.manual && s.score < 0.50).length;
+  const ratio = lowCnt / tab.scan.slots.length;
+  const warn = ratio > 0.20 || lowCnt >= 6;
+  els.gridAdjustBtn.classList.toggle("grid-warn", warn);
+  els.gridAdjustBtn.textContent = warn ? dict.gridBtnWarn : dict.gridBtn;
 }
 
 function renderTabs() {
@@ -247,14 +317,46 @@ function renderTabs() {
     const sellCnt = tab.scan
       ? tab.scan.slots.filter((sl) => evaluateItem(sl.item, state.enabledTiers, dict, state.lang).status === "SELL").length
       : 0;
+    const displayName = tabDisplayName(tab);
+    const tooltipText = tab.origFilename
+      ? `${tab.origFilename} · ${dict.tabRenameHint}`
+      : dict.tabRenameHint;
+
     const btn = document.createElement("button");
     btn.className = `tab-btn${tab.id === state.activeTabId ? " active" : ""}`;
+    btn.title = tooltipText;
     btn.innerHTML = `
-      <span>${escapeHtml(tab.name)}</span>
+      <span class="tab-label">${escapeHtml(displayName)}</span>
       <span class="tab-sell-chip">${sellCnt} ${dict.badgeSell}</span>
       <span class="tab-close" data-close="${tab.id}" title="Remove">×</span>
     `;
+
+    // Double-click label to rename inline
+    const lbl = btn.querySelector(".tab-label");
+    lbl.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.className = "tab-rename-input";
+      inp.value = displayName;
+      inp.maxLength = 24;
+      lbl.replaceWith(inp);
+      inp.focus();
+      inp.select();
+      const commit = () => {
+        const v = inp.value.trim();
+        tab.customName = v || null;
+        renderTabs();
+      };
+      inp.addEventListener("blur", commit);
+      inp.addEventListener("keydown", (ke) => {
+        if (ke.key === "Enter") inp.blur();
+        if (ke.key === "Escape") renderTabs();
+      });
+    });
+
     btn.addEventListener("click", (e) => {
+      if (e.target.closest(".tab-rename-input")) return;
       if (e.target.dataset.close) {
         removeTab(Number(e.target.dataset.close));
         return;
@@ -272,6 +374,11 @@ function renderTabs() {
 
 function renderLedger() {
   const dict = t();
+  const hasTabs = state.tabs.length > 0;
+  els.ledgerEmptyGuide.classList.toggle("hidden", hasTabs);
+  els.ledgerActive.classList.toggle("hidden", !hasTabs);
+  if (!hasTabs) return;
+
   const activeTab = getActiveTab();
   let tabSellVal = 0, tabSellSlots = 0, tabKeepSlots = 0;
   let allSellVal = 0;
@@ -298,15 +405,7 @@ function renderLedger() {
   els.statAllMoney.textContent = formatMoney(allSellVal, state.lang);
   els.statAllTabs.textContent = `${state.tabs.length} ${dict.summaryTotalTabs}`;
 
-  // Cross-storage Collection Tracker
-  if (!scanner.ready || state.tabs.length === 0) {
-    els.readyCount.textContent = "0";
-    els.almostCount.textContent = "0";
-    els.readyList.innerHTML = `<div class="empty-note">${dict.noCollectionsYet}</div>`;
-    els.almostList.innerHTML = "";
-    els.sellChecklist.innerHTML = `<div class="empty-note">${dict.sellListEmpty}</div>`;
-    return;
-  }
+  if (!scanner.ready) return;
 
   const owned = getOwnedItemCounts();
   const ready = [];
@@ -328,20 +427,13 @@ function renderLedger() {
     }
   }
 
-  // Sort by highest reward first
   ready.sort((a, b) => b.rec.reward - a.rec.reward);
   almost.sort((a, b) => b.rec.reward - a.rec.reward);
 
+  // Dynamic Ready-to-Pack: smoothly reveal ONLY when >= 1 full crate is ready!
   els.readyCount.textContent = String(ready.length);
-  els.almostCount.textContent = String(almost.length);
-
-  els.readyList.innerHTML = ready.length
-    ? ready.map(({ rec }) => renderRecipeCard(rec, owned, true)).join("")
-    : `<div class="empty-note">${dict.noneReady}</div>`;
-
-  els.almostList.innerHTML = almost.length
-    ? almost.map(({ rec }) => renderRecipeCard(rec, owned, false)).join("")
-    : `<div class="empty-note">${dict.noneAlmost}</div>`;
+  els.readySection.classList.toggle("collapsed", ready.length === 0);
+  els.readyList.innerHTML = ready.map(({ rec }) => renderRecipeCard(rec, owned, true)).join("");
 
   // Safe-to-Sell grouped checklist
   const sellTabs = state.sellScope === "all" ? state.tabs : (activeTab ? [activeTab] : []);
@@ -360,7 +452,7 @@ function renderLedger() {
   const sellArr = Array.from(grouped.values()).sort((a, b) => (b.item.sell * b.slots) - (a.item.sell * a.slots));
   els.sellChecklist.innerHTML = sellArr.length
     ? sellArr.map(({ item, slots }) => `
-      <div class="sell-item-row">
+      <div class="sell-item-row" data-open-item="${item.id}" style="cursor:pointer" title="${escapeHtml(dict.tipClickItemHint)}">
         <img src="./icons/${item.icon}" alt="" loading="lazy" />
         <div>
           <div class="sell-item-name">${escapeHtml(itemName(item))}${slots > 1 ? ` <span class="sell-item-meta">(${slots}×)</span>` : ""}</div>
@@ -370,6 +462,12 @@ function renderLedger() {
       </div>
     `).join("")
     : `<div class="empty-note">${dict.sellListEmpty}</div>`;
+
+  // 1 Item Away
+  els.almostCount.textContent = String(almost.length);
+  els.almostList.innerHTML = almost.length
+    ? almost.map(({ rec }) => renderRecipeCard(rec, owned, false)).join("")
+    : `<div class="empty-note">${dict.noneAlmost}</div>`;
 }
 
 function renderRecipeCard(rec, owned, isReady) {
@@ -408,7 +506,6 @@ function renderFixPanel() {
   }
   els.fixPanel.classList.remove("hidden");
 
-  // Top visual matches
   els.fixTopList.innerHTML = "";
   for (const cand of (slot.top5 || [])) {
     const it = cand.item;
@@ -460,7 +557,10 @@ function renderAll() {
   els.scannerView.classList.toggle("hidden", !hasTabs);
   renderTabs();
   const active = getActiveTab();
-  if (active) renderCanvas(active, els.canvas, false);
+  if (active) {
+    renderCanvas(active, els.canvas, false);
+    updateGridWarning(active);
+  }
   renderLedger();
   renderFixPanel();
 }
@@ -583,7 +683,7 @@ function showTooltip(slot, clientX, clientY) {
     ${lowWarn}
     <div class="tip-footer">
       <span>${dict.tipConfidence}: ${confPct}%</span>
-      <span>${dict.tipClickFix}</span>
+      <span>${state.lang === "de" ? "Klicken zum Ändern" : "Click to fix"}</span>
     </div>
   `;
 
@@ -610,7 +710,6 @@ function hideTooltip() {
   els.tooltip.classList.add("hidden");
 }
 
-// Hit-test canvas coordinates -> slot
 function slotAtPointer(e) {
   const tab = getActiveTab();
   if (!tab || !tab.scan) return null;
@@ -627,7 +726,6 @@ function slotAtPointer(e) {
   return null;
 }
 
-// Load image files (supports PNG, JPG, WEBP, GIF, BMP, AVIF, clipboard blobs)
 async function handleFiles(fileList) {
   if (!scanner.ready) return;
   const files = Array.from(fileList).filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(f.name || ""));
@@ -639,11 +737,9 @@ async function handleFiles(fileList) {
       const img = await loadImageFromBlob(file);
       const id = Date.now() + Math.random();
       const num = state.nextTabNum++;
-      const cleanName = file.name && !/^image\.png$/i.test(file.name)
-        ? file.name.replace(/\.[^.]+$/, "").slice(0, 22)
-        : `${t().tabPrefix} #${num}`;
+      const origFilename = file.name && !/^image\.png$/i.test(file.name) ? file.name : "";
       const scan = scanner.scan(img);
-      state.tabs.push({ id, name: cleanName, img, scan, gridOverride: null });
+      state.tabs.push({ id, num, customName: null, origFilename, img, scan, gridOverride: null });
       state.activeTabId = id;
       state.selectedSlotId = null;
     } catch (err) {
@@ -677,8 +773,18 @@ function removeTab(id) {
     state.activeTabId = state.tabs[state.tabs.length - 1]?.id ?? null;
     state.selectedSlotId = null;
   }
+  resetClearConfirm();
   syncGridInputs();
   renderAll();
+}
+
+function resetClearConfirm() {
+  if (state.clearConfirmTimer) {
+    clearTimeout(state.clearConfirmTimer);
+    state.clearConfirmTimer = null;
+  }
+  els.clearAllBtn.classList.remove("btn-confirm-danger");
+  els.clearAllBtn.textContent = t().clearAll;
 }
 
 function escapeHtml(str) {
@@ -695,7 +801,6 @@ function getFilteredDbItems() {
   const dict = t();
   const q = state.dbQuery.trim().toLowerCase();
 
-  // Deduplicate identical Safe Key / Room Key entries with identical name+rarity+sources? Keep distinct items cleanly (skip duplicate Filling/Full? Keep both or label Full!)
   const list = scanner.db.items.filter((it) => {
     if (state.dbRar !== "all" && it.rarity !== state.dbRar) return false;
     const ev = evaluateItem(it, state.enabledTiers, dict, state.lang);
@@ -732,8 +837,8 @@ function renderDatabase() {
   const dict = t();
   const list = getFilteredDbItems();
   els.dbCountBar.textContent = `${list.length} ${dict.dbResultsCount}`;
+  syncTierControls();
 
-  // Ensure a selected item if list is non-empty and nothing selected yet
   if (!state.dbSelectedId && list.length > 0) {
     state.dbSelectedId = list[0].id;
   }
@@ -873,12 +978,31 @@ function renderDbDetail() {
 
 // Event Wiring
 function wireEvents() {
-  // Top Mode Switcher (Loot Scanner vs Item Search)
+  // Top Mode Switcher
   document.querySelectorAll(".mode-tab").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
 
-  // Clicking any ingredient pill (in Ready/Almost or Dossier) jumps to that item in Item Search!
+  // Shared Collection Tier Checkboxes (Scanner + Item Search synced + saved in localStorage!)
+  document.querySelectorAll('input[type="checkbox"][data-tier]').forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const tier = cb.dataset.tier;
+      state.enabledTiers[tier] = cb.checked;
+      localStorage.setItem("rr_tiers", JSON.stringify(state.enabledTiers));
+      syncTierControls();
+      renderAll();
+      if (state.view === "scanner" && state.tabs.length > 0) flashTotals();
+      if (state.view === "database") renderDatabase();
+    });
+  });
+
+  // Item Search inline tier drawer toggle
+  els.dbTiersToggleBtn.addEventListener("click", () => {
+    state.dbTiersOpen = !state.dbTiersOpen;
+    syncTierControls();
+  });
+
+  // Click any ingredient pill or sell row -> open in Item Search; click location chip -> filter by location
   document.addEventListener("click", (e) => {
     const ing = e.target.closest("[data-open-item]");
     if (ing) {
@@ -902,6 +1026,20 @@ function wireEvents() {
       document.querySelectorAll("#db-cat-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.cat === "all"));
       document.querySelectorAll("#db-rar-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.rar === "all"));
       renderDatabase();
+    }
+  });
+
+  // Esc closes Fix Panel, Grid Panel, and Tooltip
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      hideTooltip();
+      if (state.selectedSlotId != null) {
+        state.selectedSlotId = null;
+        renderAll();
+      }
+      if (!els.gridPanel.classList.contains("hidden")) {
+        els.gridPanel.classList.add("hidden");
+      }
     }
   });
 
@@ -938,17 +1076,6 @@ function wireEvents() {
     });
   });
 
-  // Collection Tier toggles
-  document.querySelectorAll(".tier-pill").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tier = btn.dataset.tier;
-      state.enabledTiers[tier] = !state.enabledTiers[tier];
-      btn.classList.toggle("active", state.enabledTiers[tier]);
-      renderAll();
-      if (state.view === "database") renderDatabase();
-    });
-  });
-
   // Sell checklist scope toggle
   document.querySelectorAll(".scope-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -966,11 +1093,20 @@ function wireEvents() {
     els.fileInput.value = "";
   });
 
+  // Clear All with 2-click confirmation when > 1 storage is open
   els.clearAllBtn.addEventListener("click", () => {
+    if (state.tabs.length > 1 && !state.clearConfirmTimer) {
+      els.clearAllBtn.classList.add("btn-confirm-danger");
+      els.clearAllBtn.textContent = t().clearAllConfirm;
+      state.clearConfirmTimer = setTimeout(resetClearConfirm, 3200);
+      return;
+    }
+    resetClearConfirm();
     state.tabs = [];
     state.activeTabId = null;
     state.selectedSlotId = null;
     state.hoveredSlotId = null;
+    state.nextTabNum = 1;
     hideTooltip();
     renderAll();
   });
@@ -978,6 +1114,7 @@ function wireEvents() {
   // Global Ctrl+V Paste
   window.addEventListener("paste", (e) => {
     if (document.activeElement === els.fixSearchInput || document.activeElement === els.dbSearchInput) return;
+    if (document.activeElement?.classList?.contains("tab-rename-input")) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     const files = [];
@@ -1019,9 +1156,10 @@ function wireEvents() {
     }
   });
 
-  // Canvas hover & click
+  // Canvas hover & click (pointer cursor over items!)
   els.canvas.addEventListener("mousemove", (e) => {
     const sl = slotAtPointer(e);
+    els.canvas.style.cursor = sl ? "pointer" : "default";
     const nextId = sl ? sl.slotId : null;
     if (nextId !== state.hoveredSlotId) {
       state.hoveredSlotId = nextId;
@@ -1033,6 +1171,7 @@ function wireEvents() {
   });
 
   els.canvas.addEventListener("mouseleave", () => {
+    els.canvas.style.cursor = "default";
     state.hoveredSlotId = null;
     hideTooltip();
     const active = getActiveTab();
@@ -1064,9 +1203,9 @@ function wireEvents() {
     renderAll();
   });
 
-  // Toggle keep badges
-  els.toggleKeep.addEventListener("change", () => {
-    state.showKeepBadges = els.toggleKeep.checked;
+  // Only highlight SELL toggle
+  els.toggleOnlySell.addEventListener("change", () => {
+    state.onlySell = els.toggleOnlySell.checked;
     const active = getActiveTab();
     if (active) renderCanvas(active, els.canvas, false);
   });
@@ -1109,7 +1248,7 @@ function wireEvents() {
     const off = document.createElement("canvas");
     renderCanvas(tab, off, true);
     const a = document.createElement("a");
-    a.download = `${tab.name.replace(/\s+/g, "_")}_marked.png`;
+    a.download = `${tabDisplayName(tab).replace(/\s+/g, "_")}_marked.png`;
     a.href = off.toDataURL("image/png");
     a.click();
   });
@@ -1122,11 +1261,9 @@ function wireEvents() {
     try {
       const blob = await new Promise((res) => off.toBlob(res, "image/png"));
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      const old = els.copyBtn.textContent;
       els.copyBtn.textContent = t().copied;
       setTimeout(() => { els.copyBtn.textContent = t().copyPng; }, 1400);
     } catch {
-      const old = els.copyBtn.textContent;
       els.copyBtn.textContent = t().exportError;
       setTimeout(() => { els.copyBtn.textContent = t().copyPng; }, 2200);
     }
@@ -1139,14 +1276,14 @@ async function boot() {
   applyLanguage();
   try {
     await scanner.init(".");
-    els.dbStatus.classList.remove("loading");
-    els.dbStatus.classList.add("ready");
+    // Hide status pill cleanly once loaded!
+    els.dbStatus.classList.add("hidden");
     applyLanguage();
   } catch (err) {
     console.error(err);
-    els.dbStatus.classList.remove("loading");
+    els.dbStatus.classList.remove("loading", "hidden");
     els.dbStatus.classList.add("error");
-    els.dbStatus.textContent = "DB Error (serve via HTTP/GitHub Pages)";
+    els.dbStatus.textContent = t().dbError;
   }
 }
 
