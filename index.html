@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROB RUN — Loot Appraisal & Collection Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Global Drag Overlay -->
+  <div id="global-drop-overlay" class="drop-overlay hidden" aria-hidden="true">
+    <div class="drop-overlay-inner">
+      <div class="drop-overlay-icon">+</div>
+      <div class="drop-overlay-text" data-i18n="dropTitle">Drop or Paste Storage Screenshots</div>
+    </div>
+  </div>
+
+  <!-- Top Command Header -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">
+        <span class="brand-mark">RR</span>
+        <div class="brand-copy">
+          <h1 data-i18n="appTitle">ROB RUN</h1>
+          <span class="brand-sub" data-i18n="appSubtitle">LOOT APPRAISAL &amp; COLLECTION SCANNER</span>
+        </div>
+      </div>
+      <span id="db-status" class="status-pill loading" data-i18n="loadingDb">Loading item database…</span>
+    </div>
+
+    <div class="topbar-controls">
+      <div class="tier-group" role="group" aria-label="Collection Tiers">
+        <span class="tier-label" data-i18n="tiersLabel">Keep Collections:</span>
+        <button class="tier-pill active" data-tier="Basic">
+          <span class="dot dot-basic"></span>
+          <span data-i18n="tierBasic">Basic</span>
+          <span class="tier-val">$50k</span>
+        </button>
+        <button class="tier-pill active" data-tier="Additional">
+          <span class="dot dot-additional"></span>
+          <span data-i18n="tierAdditional">Additional</span>
+          <span class="tier-val">$50k</span>
+        </button>
+        <button class="tier-pill active" data-tier="Special">
+          <span class="dot dot-special"></span>
+          <span data-i18n="tierSpecial">Special</span>
+          <span class="tier-val">$150k</span>
+        </button>
+        <button class="tier-pill active" data-tier="Unique">
+          <span class="dot dot-unique"></span>
+          <span data-i18n="tierUnique">Unique</span>
+          <span class="tier-val">$500k</span>
+        </button>
+      </div>
+
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button class="lang-btn active" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="de">DE</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hidden multi-file input -->
+  <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif,image/*" multiple hidden />
+
+  <!-- Main Workspace -->
+  <main class="workspace">
+    <!-- Left / Center Canvas Stage -->
+    <section class="stage-col">
+      <!-- Empty Dropzone State -->
+      <div id="empty-state" class="empty-zone">
+        <div class="empty-zone-frame">
+          <div class="empty-badge">CTRL + V</div>
+          <h2 data-i18n="dropTitle">Drop or Paste Storage Screenshots</h2>
+          <p class="empty-sub" data-i18n="dropSub">Press Ctrl+V from Snipping Tool / ShareX, drag multiple files, or pick images below.</p>
+          <div class="empty-actions">
+            <button id="browse-btn" class="btn btn-primary" data-i18n="dropBrowse">Choose Files</button>
+          </div>
+          <p class="empty-meta" data-i18n="dropFormats">Supports PNG, JPG, WEBP, GIF, BMP, AVIF — single or multiple storages at once</p>
+          <p class="empty-privacy" data-i18n="dropPrivacy">100% client-side in your browser · No uploads · Works offline</p>
+        </div>
+      </div>
+
+      <!-- Active Scanner View -->
+      <div id="scanner-view" class="scanner-view hidden">
+        <!-- Storage Tabs Bar -->
+        <div class="tabs-bar">
+          <div id="tabs-list" class="tabs-list"></div>
+          <div class="tabs-actions">
+            <button id="add-more-btn" class="btn btn-ghost btn-sm">+ <span data-i18n="addBtn">Add Screenshots</span></button>
+            <button id="clear-all-btn" class="btn btn-ghost btn-sm btn-danger-hover" data-i18n="clearAll">Clear All</button>
+          </div>
+        </div>
+
+        <!-- Stage Action Strip -->
+        <div class="stage-toolbar">
+          <div class="legend-strip">
+            <span class="leg-item"><i class="swatch sw-sell"></i><span data-i18n="legendSell">SAFE TO SELL</span></span>
+            <span class="leg-item"><i class="swatch sw-keep"></i><span data-i18n="legendKeep">KEEP (Col/Safe/Fill)</span></span>
+            <span class="leg-item"><i class="swatch sw-util"></i><span data-i18n="legendUtil">GEAR / CHIPS</span></span>
+          </div>
+          <div class="stage-tools-right">
+            <label class="toggle-inline">
+              <input id="toggle-keep-badges" type="checkbox" checked />
+              <span data-i18n="showKeep">Show Keep Badges</span>
+            </label>
+            <button id="grid-adjust-btn" class="btn btn-ghost btn-xs" data-i18n="gridBtn">Adjust Grid</button>
+            <button id="copy-png-btn" class="btn btn-secondary btn-xs" data-i18n="copyPng">Copy Image</button>
+            <button id="download-png-btn" class="btn btn-primary btn-xs" data-i18n="downloadPng">Download PNG</button>
+          </div>
+        </div>
+
+        <!-- Collapsible Grid Nudge Panel -->
+        <div id="grid-panel" class="grid-panel hidden">
+          <label><span data-i18n="gridX">Offset X</span><input id="grid-x" type="number" step="1" /></label>
+          <label><span data-i18n="gridY">Offset Y</span><input id="grid-y" type="number" step="1" /></label>
+          <label><span data-i18n="gridCell">Cell px</span><input id="grid-cw" type="number" step="0.5" /></label>
+          <label><span data-i18n="gridCols">Cols</span><input id="grid-cols" type="number" min="3" max="10" step="1" /></label>
+          <label><span data-i18n="gridRows">Rows</span><input id="grid-rows" type="number" min="2" max="12" step="1" /></label>
+          <button id="grid-apply-btn" class="btn btn-primary btn-xs" data-i18n="gridApply">Re-scan</button>
+          <button id="grid-reset-btn" class="btn btn-ghost btn-xs" data-i18n="gridReset">Auto</button>
+        </div>
+
+        <!-- Interactive Canvas Viewport -->
+        <div class="canvas-shell">
+          <div class="canvas-wrap">
+            <canvas id="overlay-canvas"></canvas>
+            <div id="scan-spinner" class="scan-spinner hidden">
+              <span class="spinner-dot"></span>
+              <span data-i18n="scanning">Scanning storage grid…</span>
+            </div>
+          </div>
+          <div class="canvas-hint">
+            <span data-i18n="tipClickFix">Click cell to inspect / override</span> · <span data-i18n="pasteHint">Ctrl+V anywhere to paste</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Tactical Ledger Panel -->
+    <aside class="ledger-col">
+      <!-- Inline Slot Fix / Override Panel (shown when a cell is clicked) -->
+      <div id="fix-panel" class="fix-panel hidden">
+        <div class="fix-head">
+          <h3 data-i18n="fixTitle">Verify / Override Slot</h3>
+          <button id="fix-close-btn" class="btn btn-ghost btn-xs" data-i18n="fixClose">Close</button>
+        </div>
+        <div class="fix-section-label" data-i18n="fixTopMatches">Top visual matches</div>
+        <div id="fix-top-list" class="fix-list"></div>
+        <div class="fix-search-wrap">
+          <input id="fix-search-input" type="search" autocomplete="off" />
+          <div id="fix-search-results" class="fix-list"></div>
+        </div>
+        <button id="fix-empty-btn" class="btn btn-ghost btn-xs btn-danger-hover full-w" data-i18n="fixMarkEmpty">Remove / Empty Slot</button>
+      </div>
+
+      <!-- Appraisal Totals -->
+      <div class="ledger-totals">
+        <div class="total-block primary-total">
+          <div class="total-label" data-i18n="summaryTabSell">Safe to Sell (This Tab)</div>
+          <div id="stat-tab-money" class="total-money">$0</div>
+          <div id="stat-tab-counts" class="total-sub">0 sellable slots · 0 kept slots</div>
+        </div>
+        <div class="total-block secondary-total">
+          <div class="total-label" data-i18n="summaryAllSell">Safe to Sell (All Tabs)</div>
+          <div id="stat-all-money" class="total-money-sm">$0</div>
+          <div id="stat-all-tabs" class="total-sub">0 storages scanned</div>
+        </div>
+      </div>
+
+      <!-- Cross-Storage Collection Tracker -->
+      <div class="ledger-section">
+        <div class="section-head">
+          <h3 data-i18n="readyHeader">Ready to Pack</h3>
+          <span id="ready-count" class="count-chip chip-green">0</span>
+        </div>
+        <div id="ready-list" class="col-list"></div>
+      </div>
+
+      <div class="ledger-section">
+        <div class="section-head">
+          <h3 data-i18n="almostHeader">1 Item Away</h3>
+          <span id="almost-count" class="count-chip chip-amber">0</span>
+        </div>
+        <div id="almost-list" class="col-list"></div>
+      </div>
+
+      <!-- Safe-to-Sell Checklist -->
+      <div class="ledger-section">
+        <div class="section-head">
+          <h3 data-i18n="sellListHeader">Safe-to-Sell List</h3>
+          <div class="scope-switch">
+            <button class="scope-btn active" data-scope="tab" data-i18n="thisTabScope">This Storage</button>
+            <button class="scope-btn" data-scope="all" data-i18n="allTabsScope">All Storages</button>
+          </div>
+        </div>
+        <div id="sell-checklist" class="sell-checklist"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <span data-i18n="footerCredit">Item data &amp; icons from Rob Run (Kefir) via RobrunCodex · Runs 100% locally in your browser</span>
+  </footer>
+
+  <!-- Floating Rich Hover Tooltip -->
+  <div id="item-tooltip" class="item-tooltip hidden" role="tooltip"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
