@@ -1,5 +1,5 @@
-import { I18N, formatMoney, formatColFull } from "./i18n.js";
-import { RobRunScanner, evaluateItem } from "./scanner.js";
+import { I18N, formatMoney, formatColFull } from "./i18n.js?v=20261125b";
+import { RobRunScanner, evaluateItem } from "./scanner.js?v=20261125b";
 
 const scanner = new RobRunScanner();
 
