@@ -4,6 +4,7 @@ import { RobRunScanner, evaluateItem } from "./scanner.js";
 const scanner = new RobRunScanner();
 
 const state = {
+  view: "scanner", // "scanner" | "database"
   lang: localStorage.getItem("rr_lang") || (navigator.language?.toLowerCase().startsWith("de") ? "de" : "en"),
   enabledTiers: { Basic: true, Additional: true, Special: true, Unique: true },
   showKeepBadges: true,
@@ -13,9 +14,21 @@ const state = {
   hoveredSlotId: null,
   selectedSlotId: null,
   nextTabNum: 1,
+  dbCat: "all",
+  dbRar: "all",
+  dbSort: "price-desc",
+  dbQuery: "",
+  dbSelectedId: null,
 };
 
 const els = {
+  viewScanner: document.getElementById("view-scanner"),
+  viewDatabase: document.getElementById("view-database"),
+  dbSearchInput: document.getElementById("db-search-input"),
+  dbSortSelect: document.getElementById("db-sort-select"),
+  dbCountBar: document.getElementById("db-count-bar"),
+  dbItemsGrid: document.getElementById("db-items-grid"),
+  dbDetailCard: document.getElementById("db-detail-card"),
   dbStatus: document.getElementById("db-status"),
   fileInput: document.getElementById("file-input"),
   browseBtn: document.getElementById("browse-btn"),
@@ -66,6 +79,33 @@ function itemName(it) {
   return state.lang === "de" ? (it.de || it.en) : it.en;
 }
 
+function itemDesc(it) {
+  if (!it) return "";
+  return state.lang === "de" ? (it.descDe || it.descEn || "") : (it.descEn || it.descDe || "");
+}
+
+function itemSources(it) {
+  if (!it) return [];
+  const raw = state.lang === "de" ? (it.srcDe || []) : (it.srcEn || []);
+  return raw.filter((s) => s && !/^(Wird nach dem Füllen zu|When filled, turns into):?$/i.test(s.trim()));
+}
+
+function switchView(viewName, focusItemId = null) {
+  state.view = viewName;
+  els.viewScanner.classList.toggle("hidden", viewName !== "scanner");
+  els.viewDatabase.classList.toggle("hidden", viewName !== "database");
+  document.querySelectorAll(".mode-tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === viewName);
+  });
+  hideTooltip();
+  if (viewName === "database") {
+    if (focusItemId) {
+      state.dbSelectedId = focusItemId;
+    }
+    renderDatabase();
+  }
+}
+
 function getActiveTab() {
   return state.tabs.find((x) => x.id === state.activeTabId) || null;
 }
@@ -93,6 +133,11 @@ function applyLanguage() {
     if (dict[key]) node.textContent = dict[key];
   });
   els.fixSearchInput.placeholder = dict.fixSearchPh;
+  els.dbSearchInput.placeholder = dict.dbSearchPh;
+  document.querySelectorAll("#db-rar-filters .fpill[data-rar]").forEach((b) => {
+    const r = b.dataset.rar;
+    if (r !== "all" && dict.rarities[r]) b.textContent = dict.rarities[r];
+  });
   document.querySelectorAll(".lang-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.lang === state.lang);
   });
@@ -100,6 +145,7 @@ function applyLanguage() {
     els.dbStatus.textContent = `${dict.dbReady} · ${scanner.db.items.length}`;
   }
   renderAll();
+  if (state.view === "database") renderDatabase();
 }
 
 // Render annotated canvas (either live viewport or high-res export with legend bar)
@@ -332,7 +378,7 @@ function renderRecipeCard(rec, owned, isReady) {
     const has = (owned.get(ing.itemId) || 0) > 0;
     const qty = ing.quantity > 1 ? `${ing.quantity}× ` : "";
     return `
-      <span class="ing-pill ${has ? "have" : "miss"}">
+      <span class="ing-pill clickable ${has ? "have" : "miss"}" data-open-item="${ing.itemId}" title="${escapeHtml(t().tipClickItemHint)}">
         ${it ? `<img src="./icons/${it.icon}" alt="" />` : ""}
         <span>${has ? "✓" : "○"} ${qty}${escapeHtml(itemName(it))}</span>
       </span>
@@ -491,6 +537,27 @@ function showTooltip(slot, clientX, clientY) {
     ? `<div class="tip-note warn">${dict.tipLowConf}</div>`
     : "";
 
+  const sources = itemSources(it);
+  let sourcesHtml = "";
+  if (sources.length > 0) {
+    const shortChips = sources.filter((s) => s.length < 56);
+    const longNotes = sources.filter((s) => s.length >= 56);
+    sourcesHtml = `
+      <div class="tip-sources">
+        <div class="tip-sources-title">${dict.tipSources}</div>
+        ${shortChips.length ? `<div class="tip-source-chips">${shortChips.slice(0, 5).map((s) => `<span class="src-chip">${escapeHtml(s)}</span>`).join("")}${shortChips.length > 5 ? `<span class="src-chip">+${shortChips.length - 5}</span>` : ""}</div>` : ""}
+        ${longNotes.map((n) => `<div class="src-note">${escapeHtml(n)}</div>`).join("")}
+      </div>
+    `;
+  } else {
+    sourcesHtml = `
+      <div class="tip-sources">
+        <div class="tip-sources-title">${dict.tipSources}</div>
+        <div class="src-note">${dict.tipNoSource}</div>
+      </div>
+    `;
+  }
+
   els.tooltip.innerHTML = `
     <div class="tip-header">
       <img class="tip-icon" src="./icons/${it.icon}" alt="" />
@@ -501,7 +568,7 @@ function showTooltip(slot, clientX, clientY) {
           <span>·</span>
           <span>${dict.types[it.type] || it.type}</span>
           <span>·</span>
-          <span>${it.w}×${it.h}</span>
+          <span>${it.w}×${it.h}${it.stack ? ` · ${dict.tipStack} ${it.stack}` : ""}</span>
         </div>
       </div>
     </div>
@@ -510,6 +577,7 @@ function showTooltip(slot, clientX, clientY) {
       <span>${dict.tipFence}: <strong>${formatMoney(it.sell, state.lang)}</strong></span>
       ${it.fullSell ? `<span>${dict.tipFullSell}: <strong style="color:var(--util)">${formatMoney(it.fullSell, state.lang)}</strong></span>` : ""}
     </div>
+    ${sourcesHtml}
     ${extraNotes}
     ${recipesHtml}
     ${lowWarn}
@@ -619,8 +687,248 @@ function escapeHtml(str) {
   }[ch]));
 }
 
+// ============================================================
+// ITEM SEARCH / DATABASE EXPLORER VIEW
+// ============================================================
+function getFilteredDbItems() {
+  if (!scanner.ready) return [];
+  const dict = t();
+  const q = state.dbQuery.trim().toLowerCase();
+
+  // Deduplicate identical Safe Key / Room Key entries with identical name+rarity+sources? Keep distinct items cleanly (skip duplicate Filling/Full? Keep both or label Full!)
+  const list = scanner.db.items.filter((it) => {
+    if (state.dbRar !== "all" && it.rarity !== state.dbRar) return false;
+    const ev = evaluateItem(it, state.enabledTiers, dict, state.lang);
+    if (state.dbCat === "sell" && ev.status !== "SELL") return false;
+    if (state.dbCat === "col" && (!it.cols || it.cols.length === 0)) return false;
+    if (state.dbCat === "special" && it.role !== "filling" && it.role !== "barter" && !it.barter) return false;
+    if (state.dbCat === "tools" && !["tool", "key", "raid"].includes(it.role)) return false;
+
+    if (q) {
+      const hay = [
+        it.en,
+        it.de || "",
+        dict.types[it.type] || it.type,
+        ...(it.srcDe || []),
+        ...(it.srcEn || []),
+      ].join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (state.dbSort === "price-desc") {
+    list.sort((a, b) => (b.sell || 0) - (a.sell || 0) || itemName(a).localeCompare(itemName(b)));
+  } else if (state.dbSort === "price-asc") {
+    list.sort((a, b) => (a.sell || 0) - (b.sell || 0) || itemName(a).localeCompare(itemName(b)));
+  } else {
+    list.sort((a, b) => itemName(a).localeCompare(itemName(b)));
+  }
+  return list;
+}
+
+function renderDatabase() {
+  if (!scanner.ready) return;
+  const dict = t();
+  const list = getFilteredDbItems();
+  els.dbCountBar.textContent = `${list.length} ${dict.dbResultsCount}`;
+
+  // Ensure a selected item if list is non-empty and nothing selected yet
+  if (!state.dbSelectedId && list.length > 0) {
+    state.dbSelectedId = list[0].id;
+  }
+
+  els.dbItemsGrid.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  for (const it of list) {
+    const ev = evaluateItem(it, state.enabledTiers, dict, state.lang);
+    const srcs = itemSources(it);
+    const firstLoc = srcs[0] || dict.tipNoSource;
+    const stateTag = it.state === "Full" ? (state.lang === "de" ? " (Voll)" : " (Full)") : it.state === "Filling" ? (state.lang === "de" ? " (Füllend)" : " (Filling)") : "";
+
+    const btn = document.createElement("button");
+    btn.className = `db-item-card${it.id === state.dbSelectedId ? " selected" : ""}`;
+    btn.innerHTML = `
+      <img class="db-card-icon" src="./icons/${it.icon}" alt="" loading="lazy" />
+      <div style="min-width:0">
+        <div class="db-card-top">
+          <span class="db-card-name">${escapeHtml(itemName(it))}${stateTag}</span>
+          <span class="db-badge ${ev.status}">${escapeHtml(ev.badge)}</span>
+        </div>
+        <div class="db-card-meta">
+          <span class="rar-${it.rarity}">${dict.rarities[it.rarity] || it.rarity}</span>
+          <span class="db-card-price">${formatMoney(it.sell, state.lang)}</span>
+        </div>
+        <div class="db-card-loc">${escapeHtml(firstLoc)}</div>
+      </div>
+    `;
+    btn.addEventListener("click", () => {
+      state.dbSelectedId = it.id;
+      document.querySelectorAll(".db-item-card.selected").forEach((el) => el.classList.remove("selected"));
+      btn.classList.add("selected");
+      renderDbDetail();
+    });
+    frag.appendChild(btn);
+  }
+  els.dbItemsGrid.appendChild(frag);
+  renderDbDetail();
+}
+
+function renderDbDetail() {
+  const dict = t();
+  const it = state.dbSelectedId ? scanner.itemsById.get(state.dbSelectedId) : null;
+  if (!it) {
+    els.dbDetailCard.innerHTML = `<div class="empty-note">${dict.dbEmptyDetail}</div>`;
+    return;
+  }
+  const ev = evaluateItem(it, state.enabledTiers, dict, state.lang);
+  const desc = itemDesc(it);
+  const srcs = itemSources(it);
+  const owned = getOwnedItemCounts();
+  const slotsCount = Math.max(1, (it.w || 1) * (it.h || 1));
+  const perSlot = it.sell ? Math.round(it.sell / slotsCount) : 0;
+  const lv5Price = it.sell ? Math.round(it.sell * 1.5) : 0;
+  const stateTag = it.state === "Full" ? (state.lang === "de" ? " · Voll" : " · Full") : it.state === "Filling" ? (state.lang === "de" ? " · Füllend" : " · Filling") : "";
+
+  const shortChips = srcs.filter((s) => s.length < 56);
+  const longNotes = srcs.filter((s) => s.length >= 56);
+
+  const whereHtml = srcs.length
+    ? `
+      ${shortChips.length ? `<div class="tip-source-chips">${shortChips.map((s) => `<button type="button" class="src-chip src-chip-btn" data-filter-loc="${escapeHtml(s.split("(")[0].trim())}">${escapeHtml(s)}</button>`).join("")}</div>` : ""}
+      ${longNotes.map((n) => `<div class="src-note" style="margin-top:6px">${escapeHtml(n)}</div>`).join("")}
+      ${shortChips.length ? `<div class="dossier-hint">${dict.dbClickLocHint}</div>` : ""}
+    `
+    : `<div class="src-note">${dict.tipNoSource}</div>`;
+
+  let colsHtml = "";
+  if (it.cols && it.cols.length > 0) {
+    const cards = it.cols.map((c) => {
+      const rec = scanner.db.recipes.find((r) => r.slug === c.slug);
+      return rec ? renderRecipeCard(rec, owned, false) : "";
+    }).join("");
+    colsHtml = `
+      <div>
+        <div class="dossier-sec-title">${dict.tipUsedIn}</div>
+        <div class="col-list">${cards}</div>
+      </div>
+    `;
+  }
+
+  let extraHtml = "";
+  if (it.barter) {
+    extraHtml += `<div class="tip-note warn"><strong>${dict.tipBarter}:</strong> ${escapeHtml(it.barter[state.lang] || it.barter.en)}</div>`;
+  }
+  if (it.role === "filling") {
+    extraHtml += `<div class="tip-note warn">${dict.tipFillingNote}</div>`;
+  } else if (it.role === "casino") {
+    extraHtml += `<div class="tip-note warn">${dict.tipCasinoNote}</div>`;
+  } else if (it.role === "tool") {
+    extraHtml += `<div class="tip-note">${dict.tipToolNote}</div>`;
+  } else if (it.role === "key") {
+    extraHtml += `<div class="tip-note">${dict.tipKeyNote}</div>`;
+  } else if (it.role === "raid") {
+    extraHtml += `<div class="tip-note">${dict.tipRaidNote}</div>`;
+  }
+
+  els.dbDetailCard.innerHTML = `
+    <div class="dossier-head">
+      <img class="dossier-icon" src="./icons/${it.icon}" alt="" />
+      <div>
+        <div class="dossier-name">${escapeHtml(itemName(it))}</div>
+        <div class="dossier-sub">
+          <span class="rar-tag rar-${it.rarity}">${dict.rarities[it.rarity] || it.rarity}</span>
+          · ${dict.types[it.type] || it.type} · ${it.w}×${it.h}${it.stack ? ` · ${dict.tipStack} ${it.stack}` : ""}${stateTag}
+        </div>
+      </div>
+    </div>
+    ${desc ? `<div class="dossier-quote">„${escapeHtml(desc)}“</div>` : ""}
+    <div class="tip-verdict ${ev.status}">${ev.verdict}</div>
+    <div class="dossier-stats">
+      <div class="dstat">
+        <div class="dstat-label">${dict.tipFence}</div>
+        <div class="dstat-val" style="color:var(--sell)">${formatMoney(it.sell, state.lang)}</div>
+      </div>
+      <div class="dstat">
+        <div class="dstat-label">${it.fullSell ? dict.tipFullSell : dict.tipFenceMax}</div>
+        <div class="dstat-val" style="color:${it.fullSell ? "var(--util)" : "var(--text-primary)"}">${formatMoney(it.fullSell || lv5Price, state.lang)}</div>
+      </div>
+      <div class="dstat">
+        <div class="dstat-label">${dict.tipPerSlot}</div>
+        <div class="dstat-val">${formatMoney(perSlot, state.lang)}</div>
+      </div>
+      <div class="dstat">
+        <div class="dstat-label">${dict.tipSize} / ${dict.tipStack}</div>
+        <div class="dstat-val">${it.w}×${it.h} · ${it.stack || 1}×</div>
+      </div>
+    </div>
+    <div>
+      <div class="dossier-sec-title">${dict.dbWhereTitle}</div>
+      ${whereHtml}
+    </div>
+    ${extraHtml}
+    ${colsHtml}
+  `;
+}
+
 // Event Wiring
 function wireEvents() {
+  // Top Mode Switcher (Loot Scanner vs Item Search)
+  document.querySelectorAll(".mode-tab").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.dataset.view));
+  });
+
+  // Clicking any ingredient pill (in Ready/Almost or Dossier) jumps to that item in Item Search!
+  document.addEventListener("click", (e) => {
+    const ing = e.target.closest("[data-open-item]");
+    if (ing) {
+      const id = ing.dataset.openItem;
+      state.dbQuery = "";
+      els.dbSearchInput.value = "";
+      state.dbCat = "all";
+      state.dbRar = "all";
+      document.querySelectorAll("#db-cat-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.cat === "all"));
+      document.querySelectorAll("#db-rar-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.rar === "all"));
+      switchView("database", id);
+      return;
+    }
+    const locBtn = e.target.closest("[data-filter-loc]");
+    if (locBtn) {
+      const loc = locBtn.dataset.filterLoc;
+      state.dbQuery = loc;
+      els.dbSearchInput.value = loc;
+      state.dbCat = "all";
+      state.dbRar = "all";
+      document.querySelectorAll("#db-cat-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.cat === "all"));
+      document.querySelectorAll("#db-rar-filters .fpill").forEach((b) => b.classList.toggle("active", b.dataset.rar === "all"));
+      renderDatabase();
+    }
+  });
+
+  // Item Search filters & sort
+  els.dbSearchInput.addEventListener("input", () => {
+    state.dbQuery = els.dbSearchInput.value;
+    renderDatabase();
+  });
+  els.dbSortSelect.addEventListener("change", () => {
+    state.dbSort = els.dbSortSelect.value;
+    renderDatabase();
+  });
+  document.querySelectorAll("#db-cat-filters .fpill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.dbCat = btn.dataset.cat;
+      document.querySelectorAll("#db-cat-filters .fpill").forEach((b) => b.classList.toggle("active", b === btn));
+      renderDatabase();
+    });
+  });
+  document.querySelectorAll("#db-rar-filters .fpill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.dbRar = btn.dataset.rar;
+      document.querySelectorAll("#db-rar-filters .fpill").forEach((b) => b.classList.toggle("active", b === btn));
+      renderDatabase();
+    });
+  });
+
   // Language toggle
   document.querySelectorAll(".lang-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -637,6 +945,7 @@ function wireEvents() {
       state.enabledTiers[tier] = !state.enabledTiers[tier];
       btn.classList.toggle("active", state.enabledTiers[tier]);
       renderAll();
+      if (state.view === "database") renderDatabase();
     });
   });
 
@@ -668,7 +977,7 @@ function wireEvents() {
 
   // Global Ctrl+V Paste
   window.addEventListener("paste", (e) => {
-    if (document.activeElement === els.fixSearchInput) return;
+    if (document.activeElement === els.fixSearchInput || document.activeElement === els.dbSearchInput) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     const files = [];
@@ -680,6 +989,7 @@ function wireEvents() {
     }
     if (files.length > 0) {
       e.preventDefault();
+      switchView("scanner");
       handleFiles(files);
     }
   });
@@ -704,6 +1014,7 @@ function wireEvents() {
     dragDepth = 0;
     els.dropOverlay.classList.add("hidden");
     if (e.dataTransfer?.files?.length) {
+      switchView("scanner");
       handleFiles(e.dataTransfer.files);
     }
   });

@@ -26,9 +26,13 @@
         <img src="./logo.png" alt="Rob Run Loot Scanner" class="brand-logo" />
         <div class="brand-copy">
           <h1 data-i18n="appTitle">ROB RUN</h1>
-          <span class="brand-sub" data-i18n="appSubtitle">LOOT APPRAISAL &amp; COLLECTION SCANNER</span>
+          <span class="brand-sub" data-i18n="appSubtitle">ALL-IN-ONE LOOT &amp; ITEM COMPANION</span>
         </div>
       </div>
+      <nav class="mode-nav" role="tablist" aria-label="Views">
+        <button class="mode-tab active" data-view="scanner" data-i18n="navScanner">Loot Scanner</button>
+        <button class="mode-tab" data-view="database" data-i18n="navDatabase">Item Search</button>
+      </nav>
       <span id="db-status" class="status-pill loading" data-i18n="loadingDb">Loading item database…</span>
     </div>
 
@@ -67,8 +71,8 @@
   <!-- Hidden multi-file input -->
   <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif,image/*" multiple hidden />
 
-  <!-- Main Workspace -->
-  <main class="workspace">
+  <!-- Main Workspace: Scanner View -->
+  <main id="view-scanner" class="workspace">
     <!-- Left / Center Canvas Stage -->
     <section class="stage-col">
       <!-- Empty Dropzone State -->
@@ -202,6 +206,46 @@
       </div>
     </aside>
   </main>
+
+  <!-- Main Workspace: Item Search / Database View -->
+  <section id="view-database" class="db-workspace hidden">
+    <div class="db-list-col">
+      <div class="db-controls">
+        <div class="db-search-row">
+          <input id="db-search-input" type="search" autocomplete="off" placeholder="Search items or locations…" />
+          <select id="db-sort-select" aria-label="Sort">
+            <option value="price-desc" data-i18n="dbSortPriceDesc">Price ↓</option>
+            <option value="price-asc" data-i18n="dbSortPriceAsc">Price ↑</option>
+            <option value="name" data-i18n="dbSortName">Name A–Z</option>
+          </select>
+        </div>
+        <div class="db-filters-row">
+          <div id="db-cat-filters" class="filter-pills">
+            <button class="fpill active" data-cat="all" data-i18n="dbFilterAll">All</button>
+            <button class="fpill" data-cat="sell" data-i18n="dbFilterSell">Safe to Sell</button>
+            <button class="fpill" data-cat="col" data-i18n="dbFilterCol">Collections</button>
+            <button class="fpill" data-cat="special" data-i18n="dbFilterSpecial">Barter / Filling</button>
+            <button class="fpill" data-cat="tools" data-i18n="dbFilterTools">Tools / Keys / Raid</button>
+          </div>
+          <div id="db-rar-filters" class="filter-pills">
+            <button class="fpill active" data-rar="all" data-i18n="dbFilterAll">All</button>
+            <button class="fpill rar-Common" data-rar="Common">Common</button>
+            <button class="fpill rar-Uncommon" data-rar="Uncommon">Uncommon</button>
+            <button class="fpill rar-Epic" data-rar="Epic">Epic</button>
+            <button class="fpill rar-Legendary" data-rar="Legendary">Legendary</button>
+            <button class="fpill rar-Exotic" data-rar="Exotic">Exotic</button>
+          </div>
+        </div>
+        <div id="db-count-bar" class="db-count-bar">0 items</div>
+      </div>
+
+      <div id="db-items-grid" class="db-items-grid"></div>
+    </div>
+
+    <aside class="db-detail-col">
+      <div id="db-detail-card" class="db-detail-card"></div>
+    </aside>
+  </section>
 
   <footer class="footer">
     <span data-i18n="footerCredit">Item data &amp; icons from Rob Run (Kefir) via RobrunCodex · Runs 100% locally in your browser</span>
