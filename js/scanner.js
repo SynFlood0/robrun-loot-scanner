@@ -321,12 +321,12 @@ export class RobRunScanner {
       }
     }
 
-    // Valid pixel mask (excludes bottom-right stack count, bottom-left magnifying glass, bottom 3px bar, 2px borders)
+    // Valid pixel mask (excludes bottom-right stack count, bottom-left magnifying glass, bottom 2px bar, 1px borders)
     const valid = new Uint8Array(tw * th);
-    for (let y = 2; y < th - 3; y++) {
-      for (let x = 2; x < tw - 2; x++) {
-        if (y >= th - 9 && x >= tw - 11) continue;
-        if (y >= th - 8 && x < 8) continue;
+    for (let y = 1; y < th - 2; y++) {
+      for (let x = 1; x < tw - 1; x++) {
+        if (y >= th - 7 && x >= tw - 10) continue;
+        if (y >= th - 7 && x < 7) continue;
         valid[y * tw + x] = 1;
       }
     }
@@ -341,6 +341,11 @@ export class RobRunScanner {
       }
     }
     const hasBar = barTot > 0 && barBright / barTot > 0.08;
+
+    // Small ±1px shift tolerance catches sub-pixel grid offsets on thin vertical icons (ammo, rings, earrings, etc.)
+    const shifts = (wc === 1 && hc === 1)
+      ? [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]
+      : [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]];
 
     const cands = this.templatesByWH.get(`${wc}x${hc}`) || [];
     const scored = [];
@@ -359,46 +364,77 @@ export class RobRunScanner {
       else if (it.state === "Full") statePen = hasBar ? -0.18 : 0;
 
       const tmpl = cand.rgba;
-      let fgN = 0, bgN = 0, unexp = 0, fgCov = 0;
-      let sTr = 0, sTg = 0, sTb = 0, sCr = 0, sCg = 0, sCb = 0, l1Sum = 0;
+      let bestShiftScore = -9;
 
-      for (let i = 0, p = 0; i < tw * th; i++, p += 4) {
-        if (!valid[i]) continue;
-        const a = tmpl[p + 3];
-        if (a > 100) {
-          fgN++;
-          const tr = tmpl[p], tg = tmpl[p + 1], tb = tmpl[p + 2];
-          const cr = crop[p], cg = crop[p + 1], cb = crop[p + 2];
-          sTr += tr; sTg += tg; sTb += tb;
-          sCr += cr; sCg += cg; sCb += cb;
-          l1Sum += Math.abs(tr - cr) + Math.abs(tg - cg) + Math.abs(tb - cb);
-          if (fgDiff[i] > 12) fgCov++;
-        } else if (a < 20) {
-          bgN++;
-          if (fgDiff[i] > 18) unexp++;
+      for (let si = 0; si < shifts.length; si++) {
+        const dx = shifts[si][0];
+        const dy = shifts[si][1];
+        const yStart = Math.max(1, 1 + dy);
+        const yEnd = Math.min(th - 2, th + dy);
+        const xStart = Math.max(1, 1 + dx);
+        const xEnd = Math.min(tw - 1, tw + dx);
+
+        let fgN = 0, bgN = 0, unexp = 0, fgCov = 0;
+        let sTr = 0, sTg = 0, sTb = 0, sCr = 0, sCg = 0, sCb = 0, l1Sum = 0;
+
+        for (let cy = yStart; cy < yEnd; cy++) {
+          const ty = cy - dy;
+          const cRow = cy * tw;
+          const tRow = ty * tw;
+          for (let cx = xStart; cx < xEnd; cx++) {
+            const ci = cRow + cx;
+            if (!valid[ci]) continue;
+            const tp = (tRow + (cx - dx)) * 4;
+            const a = tmpl[tp + 3];
+            if (a > 100) {
+              fgN++;
+              const cp = ci * 4;
+              const tr = tmpl[tp], tg = tmpl[tp + 1], tb = tmpl[tp + 2];
+              const cr = crop[cp], cg = crop[cp + 1], cb = crop[cp + 2];
+              sTr += tr; sTg += tg; sTb += tb;
+              sCr += cr; sCg += cg; sCb += cb;
+              l1Sum += Math.abs(tr - cr) + Math.abs(tg - cg) + Math.abs(tb - cb);
+              if (fgDiff[ci] > 12) fgCov++;
+            } else if (a < 20) {
+              bgN++;
+              if (fgDiff[ci] > 18) unexp++;
+            }
+          }
         }
-      }
-      if (fgN < 10) continue;
+        if (fgN < 10) continue;
 
-      const mTr = sTr / fgN, mTg = sTg / fgN, mTb = sTb / fgN;
-      const mCr = sCr / fgN, mCg = sCg / fgN, mCb = sCb / fgN;
-      let dot = 0, nT = 0, nC = 0;
-      for (let i = 0, p = 0; i < tw * th; i++, p += 4) {
-        if (!valid[i] || tmpl[p + 3] <= 100) continue;
-        const dTr = tmpl[p] - mTr, dTg = tmpl[p + 1] - mTg, dTb = tmpl[p + 2] - mTb;
-        const dCr = crop[p] - mCr, dCg = crop[p + 1] - mCg, dCb = crop[p + 2] - mCb;
-        dot += dTr * dCr + dTg * dCg + dTb * dCb;
-        nT += dTr * dTr + dTg * dTg + dTb * dTb;
-        nC += dCr * dCr + dCg * dCg + dCb * dCb;
+        const mTr = sTr / fgN, mTg = sTg / fgN, mTb = sTb / fgN;
+        const mCr = sCr / fgN, mCg = sCg / fgN, mCb = sCb / fgN;
+        let dot = 0, nT = 0, nC = 0;
+        for (let cy = yStart; cy < yEnd; cy++) {
+          const ty = cy - dy;
+          const cRow = cy * tw;
+          const tRow = ty * tw;
+          for (let cx = xStart; cx < xEnd; cx++) {
+            const ci = cRow + cx;
+            if (!valid[ci]) continue;
+            const tp = (tRow + (cx - dx)) * 4;
+            if (tmpl[tp + 3] <= 100) continue;
+            const cp = ci * 4;
+            const dTr = tmpl[tp] - mTr, dTg = tmpl[tp + 1] - mTg, dTb = tmpl[tp + 2] - mTb;
+            const dCr = crop[cp] - mCr, dCg = crop[cp + 1] - mCg, dCb = crop[cp + 2] - mCb;
+            dot += dTr * dCr + dTg * dCg + dTb * dCb;
+            nT += dTr * dTr + dTg * dTg + dTb * dTb;
+            nC += dCr * dCr + dCg * dCg + dCb * dCb;
+          }
+        }
+
+        const corr = dot / (Math.sqrt(nT * nC) + 1e-6);
+        const l1 = l1Sum / (fgN * 3 * 255);
+        const unexpRate = bgN > 8 ? unexp / bgN : 0;
+        const fgCovRate = fgCov / fgN;
+        const sc = corr - 0.85 * l1 - 0.55 * unexpRate + 0.25 * fgCovRate;
+        if (sc > bestShiftScore) bestShiftScore = sc;
       }
 
-      const corr = dot / (Math.sqrt(nT * nC) + 1e-6);
-      const l1 = l1Sum / (fgN * 3 * 255);
-      const unexpRate = bgN > 8 ? unexp / bgN : 0;
-      const fgCovRate = fgCov / fgN;
+      if (bestShiftScore <= -8) continue;
       const rarBonus = rarMatch ? 0.08 : -0.05;
-      const score = corr - 0.85 * l1 - 0.55 * unexpRate + 0.25 * fgCovRate + rarBonus + statePen;
-      scored.push({ item: it, score });
+      scored.push({ item: it, score: bestShiftScore + rarBonus + statePen });
     }
 
     scored.sort((a, b) => b.score - a.score);
