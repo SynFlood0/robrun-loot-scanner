@@ -1,5 +1,5 @@
 // Rob Run Car Tuning & Police Comparison Workbench (Datamined Build 4052)
-import { formatMoney } from "./i18n.js?v=20261125d";
+import { formatMoney } from "./i18n.js?v=20261125e";
 
 export const PART_PRICES = {
   ecu:         { none: 0, uncommon: 14000, epic: 75000,  legendary: 330000 },

@@ -1,6 +1,6 @@
-import { I18N, formatMoney, formatColFull } from "./i18n.js?v=20261125d";
-import { RobRunScanner, evaluateItem } from "./scanner.js?v=20261125d";
-import { VehicleWorkbench } from "./vehicles.js?v=20261125d";
+import { I18N, formatMoney, formatColFull } from "./i18n.js?v=20261125e";
+import { RobRunScanner, evaluateItem } from "./scanner.js?v=20261125e";
+import { VehicleWorkbench } from "./vehicles.js?v=20261125e";
 
 const scanner = new RobRunScanner();
 
