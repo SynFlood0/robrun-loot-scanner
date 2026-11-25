@@ -1,5 +1,5 @@
 // Rob Run Car Tuning & Police Comparison Workbench (Datamined Build 4052)
-import { formatMoney } from "./i18n.js?v=20261125c";
+import { formatMoney } from "./i18n.js?v=20261125d";
 
 export const PART_PRICES = {
   ecu:         { none: 0, uncommon: 14000, epic: 75000,  legendary: 330000 },
@@ -11,9 +11,20 @@ export const PART_PRICES = {
   cargo:       { none: 0, epic: 86500,     legendary: 350000 },
 };
 
+export const PART_ICONS = {
+  ecu:         { uncommon: "car_ecu_1.webp",            epic: "car_ecu_2.webp",            legendary: "car_ecu_3.webp" },
+  turbo:       { epic: "car_turbocharger_1.webp",       legendary: "car_turbocharger_2.webp" },
+  intercooler: { epic: "car_engine_cooling_1.webp",     legendary: "car_engine_cooling_2.webp" },
+  steering:    { epic: "car_steering_rack_1.webp",      legendary: "car_steering_rack_2.webp" },
+  brake:       { uncommon: "car_suspension_1.webp",     epic: "car_suspension_2.webp" },
+  trunk:       { uncommon: "car_inventory_1.webp",      epic: "car_inventory_2.webp",      legendary: "car_inventory_3.webp" },
+  cargo:       { epic: "car_cargo_1.webp",              legendary: "car_cargo_2.webp" },
+};
+
 export const VEHICLES = [
   {
     id: "fukurou_spark",
+    icon: "fukurou_spark.webp",
     name: "Fukurou Spark",
     alias: { en: "Motel Rental", de: "Motel-Mietwagen" },
     rarity: "Common",
@@ -34,6 +45,7 @@ export const VEHICLES = [
   },
   {
     id: "longhorn_van",
+    icon: "longhorn_van.webp",
     name: "Longhorn Van",
     alias: { en: "Cargo Van", de: "Transporter" },
     rarity: "Uncommon",
@@ -61,6 +73,7 @@ export const VEHICLES = [
   },
   {
     id: "fukurou_tensa",
+    icon: "fukurou_tensa.webp",
     name: "Fukurou Tensa",
     alias: { en: "Starter Sedan", de: "Starter-Limousine" },
     rarity: "Uncommon",
@@ -88,6 +101,7 @@ export const VEHICLES = [
   },
   {
     id: "longhorn_titan",
+    icon: "longhorn_titan.webp",
     name: "Longhorn Titan",
     alias: { en: "Tier II SUV", de: "Tier-II SUV" },
     rarity: "Epic",
@@ -115,6 +129,7 @@ export const VEHICLES = [
   },
   {
     id: "royal_e",
+    icon: "royal_e.webp",
     name: "Royal E",
     alias: { en: "BMW Sedan", de: "BMW" },
     rarity: "Epic",
@@ -142,6 +157,7 @@ export const VEHICLES = [
   },
   {
     id: "royal_j",
+    icon: "royal_j.webp",
     name: "Royal J",
     alias: { en: "Tier III Crossover", de: "Tier-III Crossover" },
     rarity: "Legendary",
@@ -169,6 +185,7 @@ export const VEHICLES = [
   },
   {
     id: "longhorn_wild",
+    icon: "longhorn_wild.webp",
     name: "Longhorn Wild",
     alias: { en: "Dodge Muscle", de: "Dodge" },
     rarity: "Legendary",
@@ -196,6 +213,7 @@ export const VEHICLES = [
   },
   {
     id: "buletti_soltempra",
+    icon: "buletti_soltempra.webp",
     name: "Buletti Soltempra",
     alias: { en: "Exotic Supercar", de: "Exotic / Lambo" },
     rarity: "Exotic",
@@ -223,6 +241,7 @@ export const VEHICLES = [
   },
   {
     id: "police_guard",
+    icon: null,
     name: "Longhorn Guard",
     alias: { en: "Police Patrol", de: "Polizei-Streife" },
     rarity: "Police",
@@ -243,6 +262,7 @@ export const VEHICLES = [
   },
   {
     id: "police_outrider",
+    icon: null,
     name: "Longhorn Outrider",
     alias: { en: "Police SUV", de: "Polizei-SUV" },
     rarity: "Police",
@@ -263,6 +283,7 @@ export const VEHICLES = [
   },
   {
     id: "police_wild",
+    icon: null,
     name: "Longhorn Wild Guard",
     alias: { en: "Police Interceptor", de: "Polizei-Abfangjäger" },
     rarity: "Police",
@@ -488,7 +509,10 @@ export class VehicleWorkbench {
 
           <div class="veh-fleet-footer">
             <span><strong>${escapeHtml(dict.vehRuleTitle)}:</strong> ${escapeHtml(dict.vehRuleText)}</span>
-            <span><strong>Romanov R8 (${lang === "de" ? "Heli" : "Heli"}):</strong> ${formatMoney(10000000, lang)} · 4 ${escapeHtml(dict.vehSeats)} · 35 m/s · 210 m</span>
+            <span class="veh-heli-chip">
+              <img src="./icons/vehicles/romanov_r8.webp" alt="" />
+              <strong>Romanov R8 (Heli):</strong> ${formatMoney(10000000, lang)} · 4 ${escapeHtml(dict.vehSeats)} · 35 m/s · 210 m
+            </span>
           </div>
         </section>
       </div>
@@ -534,44 +558,43 @@ export class VehicleWorkbench {
     }).join("");
 
     const partsEditorHtml = car.upgradeable ? `
-      <div class="veh-parts-grid">
-        ${this.renderPartSelect(slotKey, "ecu", dict.vehPartEcu, parts.ecu, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "uncommon", lbl: `${dict.rarities.Uncommon} (+${fmtNum(car.mods.ecu.uncommon, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.uncommon, lang)})` },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${fmtNum(car.mods.ecu.epic, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.epic, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${fmtNum(car.mods.ecu.legendary, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.legendary, lang)})` },
-        ])}
-        ${this.renderPartSelect(slotKey, "turbo", dict.vehPartTurbo, parts.turbo, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${fmtNum(car.mods.turbo.epic, lang, 2)} DF · ${formatMoney(PART_PRICES.turbo.epic, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${fmtNum(car.mods.turbo.legendary, lang, 2)} DF · ${formatMoney(PART_PRICES.turbo.legendary, lang)})` },
-        ])}
-        ${this.renderPartSelect(slotKey, "intercooler", dict.vehPartIntercooler, parts.intercooler, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${fmtNum(car.mods.intercooler.epic, lang, 2)} DF · ${formatMoney(PART_PRICES.intercooler.epic, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${fmtNum(car.mods.intercooler.legendary, lang, 2)} DF · ${formatMoney(PART_PRICES.intercooler.legendary, lang)})` },
-        ])}
-        ${this.renderPartSelect(slotKey, "steering", dict.vehPartSteering, parts.steering, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${fmtNum(car.mods.steering.epic[0], lang, 2)} / +${fmtNum(car.mods.steering.epic[1], lang, 2)} · ${formatMoney(PART_PRICES.steering.epic, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${fmtNum(car.mods.steering.legendary[0], lang, 2)} / +${fmtNum(car.mods.steering.legendary[1], lang, 2)} · ${formatMoney(PART_PRICES.steering.legendary, lang)})` },
-        ])}
-        ${this.renderPartSelect(slotKey, "brake", dict.vehPartBrake, parts.brake, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "uncommon", lbl: `${dict.rarities.Uncommon} (+${fmtNum(car.mods.brake.uncommon[0], lang, 2)} / +${fmtNum(car.mods.brake.uncommon[1], lang, 2)} · ${formatMoney(PART_PRICES.brake.uncommon, lang)})` },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${fmtNum(car.mods.brake.epic[0], lang, 2)} / +${fmtNum(car.mods.brake.epic[1], lang, 2)} · ${formatMoney(PART_PRICES.brake.epic, lang)})` },
-        ])}
-        ${car.trunkSlots > 0 ? this.renderPartSelect(slotKey, "trunk", `${dict.vehPartTrunk} (${car.trunkSlots}×)`, parts.trunk, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "uncommon", lbl: `${dict.rarities.Uncommon} (+${car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.uncommon * car.trunkSlots, lang)})` },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${2 * car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.epic * car.trunkSlots, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${3 * car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.legendary * car.trunkSlots, lang)})` },
-        ]) : ""}
-        ${car.cargoSlots > 0 ? this.renderPartSelect(slotKey, "cargo", `${dict.vehPartCargo} (${car.cargoSlots}×)`, parts.cargo, [
-          { val: "none", lbl: dict.vehNone },
-          { val: "epic", lbl: `${dict.rarities.Epic} (+${car.cargoSlots} ${dict.vehCargoShort} · ${formatMoney(PART_PRICES.cargo.epic * car.cargoSlots, lang)})` },
-          { val: "legendary", lbl: `${dict.rarities.Legendary} (+${2 * car.cargoSlots} ${dict.vehCargoShort} · ${formatMoney(PART_PRICES.cargo.legendary * car.cargoSlots, lang)})` },
-        ]) : ""}
+      <div class="veh-parts-rack">
+        ${this.renderPartIconRow(slotKey, "ecu", dict.vehPartEcu, parts.ecu, [
+          { val: "uncommon", bonus: `+${fmtNum(car.mods.ecu.uncommon, lang, 1)}`, tip: `${dict.rarities.Uncommon} · +${fmtNum(car.mods.ecu.uncommon, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.uncommon, lang)}` },
+          { val: "epic", bonus: `+${fmtNum(car.mods.ecu.epic, lang, 1)}`, tip: `${dict.rarities.Epic} · +${fmtNum(car.mods.ecu.epic, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.epic, lang)}` },
+          { val: "legendary", bonus: `+${fmtNum(car.mods.ecu.legendary, lang, 1)}`, tip: `${dict.rarities.Legendary} · +${fmtNum(car.mods.ecu.legendary, lang, 1)} km/h · ${formatMoney(PART_PRICES.ecu.legendary, lang)}` },
+        ], lang, dict)}
+
+        ${this.renderPartIconRow(slotKey, "turbo", dict.vehPartTurbo, parts.turbo, [
+          { val: "epic", bonus: `+${fmtNum(car.mods.turbo.epic, lang, 2)}`, tip: `${dict.rarities.Epic} · +${fmtNum(car.mods.turbo.epic, lang, 2)} DF · ${formatMoney(PART_PRICES.turbo.epic, lang)}` },
+          { val: "legendary", bonus: `+${fmtNum(car.mods.turbo.legendary, lang, 2)}`, tip: `${dict.rarities.Legendary} · +${fmtNum(car.mods.turbo.legendary, lang, 2)} DF · ${formatMoney(PART_PRICES.turbo.legendary, lang)}` },
+        ], lang, dict)}
+
+        ${this.renderPartIconRow(slotKey, "intercooler", dict.vehPartIntercooler, parts.intercooler, [
+          { val: "epic", bonus: `+${fmtNum(car.mods.intercooler.epic, lang, 2)}`, tip: `${dict.rarities.Epic} · +${fmtNum(car.mods.intercooler.epic, lang, 2)} DF · ${formatMoney(PART_PRICES.intercooler.epic, lang)}` },
+          { val: "legendary", bonus: `+${fmtNum(car.mods.intercooler.legendary, lang, 2)}`, tip: `${dict.rarities.Legendary} · +${fmtNum(car.mods.intercooler.legendary, lang, 2)} DF · ${formatMoney(PART_PRICES.intercooler.legendary, lang)}` },
+        ], lang, dict)}
+
+        ${this.renderPartIconRow(slotKey, "steering", dict.vehPartSteering, parts.steering, [
+          { val: "epic", bonus: `+${fmtNum(car.mods.steering.epic[1], lang, 2)}`, tip: `${dict.rarities.Epic} · +${fmtNum(car.mods.steering.epic[0], lang, 2)} / +${fmtNum(car.mods.steering.epic[1], lang, 2)} · ${formatMoney(PART_PRICES.steering.epic, lang)}` },
+          { val: "legendary", bonus: `+${fmtNum(car.mods.steering.legendary[1], lang, 2)}`, tip: `${dict.rarities.Legendary} · +${fmtNum(car.mods.steering.legendary[0], lang, 2)} / +${fmtNum(car.mods.steering.legendary[1], lang, 2)} · ${formatMoney(PART_PRICES.steering.legendary, lang)}` },
+        ], lang, dict)}
+
+        ${this.renderPartIconRow(slotKey, "brake", dict.vehPartBrake, parts.brake, [
+          { val: "uncommon", bonus: `+${fmtNum(car.mods.brake.uncommon[0], lang, 2)}`, tip: `${dict.rarities.Uncommon} · +${fmtNum(car.mods.brake.uncommon[0], lang, 2)} / +${fmtNum(car.mods.brake.uncommon[1], lang, 2)} · ${formatMoney(PART_PRICES.brake.uncommon, lang)}` },
+          { val: "epic", bonus: `+${fmtNum(car.mods.brake.epic[0], lang, 2)}`, tip: `${dict.rarities.Epic} · +${fmtNum(car.mods.brake.epic[0], lang, 2)} / +${fmtNum(car.mods.brake.epic[1], lang, 2)} · ${formatMoney(PART_PRICES.brake.epic, lang)}` },
+        ], lang, dict)}
+
+        ${car.trunkSlots > 0 ? this.renderPartIconRow(slotKey, "trunk", `${dict.vehPartTrunk} (${car.trunkSlots}×)`, parts.trunk, [
+          { val: "uncommon", bonus: `+${car.trunkSlots}R`, tip: `${dict.rarities.Uncommon} · +${car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.uncommon * car.trunkSlots, lang)}` },
+          { val: "epic", bonus: `+${2 * car.trunkSlots}R`, tip: `${dict.rarities.Epic} · +${2 * car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.epic * car.trunkSlots, lang)}` },
+          { val: "legendary", bonus: `+${3 * car.trunkSlots}R`, tip: `${dict.rarities.Legendary} · +${3 * car.trunkSlots} ${dict.vehRowsShort} · ${formatMoney(PART_PRICES.trunk.legendary * car.trunkSlots, lang)}` },
+        ], lang, dict) : ""}
+
+        ${car.cargoSlots > 0 ? this.renderPartIconRow(slotKey, "cargo", `${dict.vehPartCargo} (${car.cargoSlots}×)`, parts.cargo, [
+          { val: "epic", bonus: `+${car.cargoSlots}F`, tip: `${dict.rarities.Epic} · +${car.cargoSlots} ${dict.vehCargoShort} · ${formatMoney(PART_PRICES.cargo.epic * car.cargoSlots, lang)}` },
+          { val: "legendary", bonus: `+${2 * car.cargoSlots}F`, tip: `${dict.rarities.Legendary} · +${2 * car.cargoSlots} ${dict.vehCargoShort} · ${formatMoney(PART_PRICES.cargo.legendary * car.cargoSlots, lang)}` },
+        ], lang, dict) : ""}
       </div>
     ` : `<div class="veh-locked-note">${escapeHtml(dict.vehNoUpgrades)}</div>`;
 
@@ -584,6 +607,9 @@ export class VehicleWorkbench {
         <div class="veh-card-top">
           <div class="veh-slot-picker">
             <span class="veh-slot-badge">${label}</span>
+            ${car.icon
+              ? `<img class="veh-car-thumb" src="./icons/vehicles/${car.icon}" alt="" />`
+              : `<span class="veh-cop-thumb" aria-hidden="true"><i></i><i></i></span>`}
             <select class="veh-car-select" data-slot-car="${slotKey}">
               ${optionsHtml}
             </select>
@@ -659,21 +685,51 @@ export class VehicleWorkbench {
           </div>
         ` : ""}
 
-        <!-- Individual Part Selectors -->
+        <!-- In-Game Icon Tuning Rack -->
         ${partsEditorHtml}
       </div>
     `;
   }
 
-  renderPartSelect(slotKey, partKey, label, currentVal, options) {
-    const rarCls = currentVal !== "none" ? `part-${currentVal}` : "";
+  renderPartIconRow(slotKey, partKey, label, currentVal, tiers, lang, dict) {
+    const iconMap = PART_ICONS[partKey] || {};
+    const tilesHtml = tiers.map((t) => {
+      const active = currentVal === t.val;
+      const iconFile = iconMap[t.val];
+      return `
+        <button
+          type="button"
+          class="veh-icon-tile tier-${t.val}${active ? " active" : ""}"
+          data-slot-part-btn="${slotKey}:${partKey}:${t.val}"
+          title="${escapeHtml(label)} — ${escapeHtml(t.tip)}"
+        >
+          <img src="./icons/tuning/${iconFile}" alt="${escapeHtml(t.val)}" loading="lazy" />
+          <span class="veh-tile-val">${escapeHtml(t.bonus)}</span>
+        </button>
+      `;
+    }).join("");
+
+    const activeTier = tiers.find((t) => t.val === currentVal);
     return `
-      <label class="veh-part-field ${rarCls}">
-        <span>${escapeHtml(label)}</span>
-        <select data-slot-part="${slotKey}:${partKey}">
-          ${options.map((o) => `<option value="${o.val}"${o.val === currentVal ? " selected" : ""}>${escapeHtml(o.lbl)}</option>`).join("")}
-        </select>
-      </label>
+      <div class="veh-part-row">
+        <div class="veh-part-info">
+          <span class="veh-part-lbl">${escapeHtml(label)}</span>
+          <span class="veh-part-status ${currentVal !== "none" ? `st-${currentVal}` : ""}">
+            ${activeTier ? escapeHtml(activeTier.tip.split("·").slice(1).join("·").trim()) : escapeHtml(dict.vehStock)}
+          </span>
+        </div>
+        <div class="veh-icon-tiles">
+          <button
+            type="button"
+            class="veh-icon-tile tier-none${currentVal === "none" ? " active" : ""}"
+            data-slot-part-btn="${slotKey}:${partKey}:none"
+            title="${escapeHtml(dict.vehNone)}"
+          >
+            <span class="veh-none-dash">—</span>
+          </button>
+          ${tilesHtml}
+        </div>
+      </div>
     `;
   }
 
@@ -719,12 +775,17 @@ export class VehicleWorkbench {
       return `
         <div class="veh-fleet-row${car.category === "police" ? " is-police" : ""}">
           <div class="vf-name-cell">
-            <div class="vf-name-top">
-              <strong>${escapeHtml(car.name)}</strong>
-              ${tagHtml}
-            </div>
-            <div class="vf-name-sub">
-              ${escapeHtml(car.alias?.[lang] || "")} · ${car.seats} ${escapeHtml(dict.vehSeats)} · ${car.gears} ${escapeHtml(dict.vehGears)}${car.price ? ` · ${formatMoney(car.price, lang)}` : ""}
+            ${car.icon
+              ? `<img class="vf-car-icon" src="./icons/vehicles/${car.icon}" alt="" loading="lazy" />`
+              : `<span class="veh-cop-thumb lg" aria-hidden="true"><i></i><i></i></span>`}
+            <div style="min-width:0">
+              <div class="vf-name-top">
+                <strong>${escapeHtml(car.name)}</strong>
+                ${tagHtml}
+              </div>
+              <div class="vf-name-sub">
+                ${escapeHtml(car.alias?.[lang] || "")} · ${car.seats} ${escapeHtml(dict.vehSeats)} · ${car.gears} ${escapeHtml(dict.vehGears)}${car.price ? ` · ${formatMoney(car.price, lang)}` : ""}
+              </div>
             </div>
           </div>
 
@@ -773,13 +834,6 @@ export class VehicleWorkbench {
         this.render();
         return;
       }
-      const partSel = e.target.closest("[data-slot-part]");
-      if (partSel) {
-        const [slot, partKey] = partSel.dataset.slotPart.split(":");
-        this.state[slot].parts[partKey] = partSel.value;
-        this.render();
-        return;
-      }
       if (e.target.id === "veh-fleet-sort") {
         this.state.fleetSort = e.target.value;
         this.render();
@@ -787,6 +841,14 @@ export class VehicleWorkbench {
     });
 
     this.root.addEventListener("click", (e) => {
+      const partBtn = e.target.closest("[data-slot-part-btn]");
+      if (partBtn) {
+        const [slot, partKey, tier] = partBtn.dataset.slotPartBtn.split(":");
+        const cur = this.state[slot].parts[partKey];
+        this.state[slot].parts[partKey] = (cur === tier && tier !== "none") ? "none" : tier;
+        this.render();
+        return;
+      }
       const sp = e.target.closest("[data-slot-preset]");
       if (sp) {
         const [slot, preset] = sp.dataset.slotPreset.split(":");

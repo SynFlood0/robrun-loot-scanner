@@ -2271,43 +2271,233 @@ body {
   font-size: 10px;
 }
 
-/* Individual Part Selectors */
-.veh-parts-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding-top: 8px;
+/* In-Game Icon Tuning Rack & Vehicle Thumbnails */
+.veh-car-thumb {
+  width: 52px;
+  height: 34px;
+  object-fit: contain;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.veh-cop-thumb {
+  width: 52px;
+  height: 34px;
+  background: linear-gradient(135deg, rgba(220,38,38,0.16), rgba(37,99,235,0.22));
+  border: 1px solid rgba(59,130,246,0.45);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.veh-cop-thumb.lg {
+  width: 56px;
+  height: 36px;
+}
+
+.veh-cop-thumb i {
+  display: block;
+  width: 14px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.veh-cop-thumb i:first-child {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239,68,68,0.7);
+}
+
+.veh-cop-thumb i:last-child {
+  background: #3b82f6;
+  box-shadow: 0 0 8px rgba(59,130,246,0.75);
+}
+
+.veh-parts-rack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 9px;
   border-top: 1px solid var(--border-subtle);
 }
 
-.veh-part-field {
+.veh-part-row {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.veh-part-field span {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.veh-part-field select {
-  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
   background: var(--bg-canvas);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 11.5px;
-  padding: 5px 7px;
-  cursor: pointer;
 }
 
-.veh-part-field.part-uncommon select  { border-color: rgba(78,168,89,0.55); color: #9de8a6; }
-.veh-part-field.part-epic select      { border-color: rgba(164,104,230,0.6); color: #d8beff; }
-.veh-part-field.part-legendary select { border-color: rgba(223,176,54,0.65); color: #f8da7c; }
+.veh-part-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.veh-part-lbl {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.veh-part-status {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.veh-part-status.st-uncommon  { color: #7ee089; }
+.veh-part-status.st-epic      { color: #d3b2ff; }
+.veh-part-status.st-legendary { color: #f6d574; }
+
+.veh-icon-tiles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.veh-icon-tile {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  padding: 4px 4px 12px;
+  border-radius: 5px;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 110ms var(--ease-out), border-color 120ms, background 120ms, box-shadow 120ms, opacity 120ms;
+  opacity: 0.62;
+}
+
+.veh-icon-tile:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  background: var(--bg-elevated);
+}
+
+.veh-icon-tile.active {
+  opacity: 1;
+}
+
+.veh-icon-tile img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.veh-tile-val {
+  position: absolute;
+  bottom: 1px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.veh-icon-tile.tier-none {
+  width: 30px;
+  padding: 0;
+  opacity: 0.55;
+}
+
+.veh-icon-tile.tier-none.active {
+  opacity: 1;
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.veh-none-dash {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.veh-icon-tile.tier-uncommon {
+  border-color: rgba(78, 168, 89, 0.45);
+  color: #82e38d;
+}
+.veh-icon-tile.tier-uncommon.active {
+  border-color: var(--rar-uncommon);
+  background: rgba(78, 168, 89, 0.20);
+  box-shadow: 0 0 0 1px rgba(78, 168, 89, 0.45), inset 0 0 10px rgba(78, 168, 89, 0.18);
+}
+
+.veh-icon-tile.tier-epic {
+  border-color: rgba(164, 104, 230, 0.45);
+  color: #d6b8ff;
+}
+.veh-icon-tile.tier-epic.active {
+  border-color: var(--rar-epic);
+  background: rgba(164, 104, 230, 0.22);
+  box-shadow: 0 0 0 1px rgba(164, 104, 230, 0.5), inset 0 0 10px rgba(164, 104, 230, 0.22);
+}
+
+.veh-icon-tile.tier-legendary {
+  border-color: rgba(223, 176, 54, 0.48);
+  color: #ffe080;
+}
+.veh-icon-tile.tier-legendary.active {
+  border-color: var(--rar-legendary);
+  background: rgba(223, 176, 54, 0.22);
+  box-shadow: 0 0 0 1px rgba(223, 176, 54, 0.55), inset 0 0 10px rgba(223, 176, 54, 0.22);
+}
+
+.vf-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vf-car-icon {
+  width: 56px;
+  height: 36px;
+  object-fit: contain;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.veh-heli-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.veh-heli-chip img {
+  width: 34px;
+  height: 22px;
+  object-fit: contain;
+}
 
 .veh-locked-note {
   padding: 12px;
